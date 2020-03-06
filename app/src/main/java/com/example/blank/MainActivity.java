@@ -1,7 +1,13 @@
 package com.example.blank;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.Observer;
+
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.GeoPoint;
 
 import android.net.Uri;
 import android.os.Bundle;
@@ -19,7 +25,15 @@ import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.UserProfileChangeRequest;
+import com.google.firebase.firestore.CollectionReference;
+import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.google.firebase.firestore.QuerySnapshot;
+
+import org.imperiumlabs.geofirestore.GeoFirestore;
+
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -31,10 +45,10 @@ public class MainActivity extends AppCompatActivity {
     private Button mActionBtn;
     private TextView mTextBox;
 
-
     private FirebaseFirestore mDatabase;
     private FirebaseAuth mAuth;
     private FirebaseUser mUser;
+    private MutableLiveData<String> mMessage;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
         mDatabase = FirebaseFirestore.getInstance();
         mAuth = FirebaseAuth.getInstance();
         mUser = mAuth.getCurrentUser();
+        mMessage = new MutableLiveData<>();
         /* ------------------------------------------------------ */
 
         updateTextBox();
@@ -59,6 +74,8 @@ public class MainActivity extends AppCompatActivity {
                     .addOnSuccessListener((AuthResult authResult) -> {
                         mUser = mAuth.getCurrentUser();
                         updateTextBox();
+                        mMessage.setValue("Sign In Successful");
+
                         Toast.makeText(this, "Sign In Successful", Toast.LENGTH_SHORT).show();
                     })
                     .addOnFailureListener((@NonNull Exception e) -> {
@@ -71,6 +88,7 @@ public class MainActivity extends AppCompatActivity {
             mAuth.signOut();
             mUser = mAuth.getCurrentUser();
             updateTextBox();
+            mMessage.setValue("Signed out");
             Toast.makeText(this, "Signed out", Toast.LENGTH_SHORT).show();
         });
 
@@ -96,23 +114,63 @@ public class MainActivity extends AppCompatActivity {
         String displayName = "Pranav";
 
         mActionBtn.setOnClickListener((View view) -> {
-            UserProfileChangeRequest profileUpdates = new UserProfileChangeRequest.Builder()
-                    .setDisplayName(displayName)
-                    .build();
 
-            mUser.updateProfile(profileUpdates)
-                    .addOnSuccessListener((Void aVoid) -> {
-                        mUser = mAuth.getCurrentUser();
-                        updateTextBox();
-                        Toast.makeText(this, "Profile Updated", Toast.LENGTH_SHORT).show();
-                    })
-                    .addOnFailureListener((@NonNull Exception e) -> {
-                        Log.d(TAG, "Profile updates failed", e);
-                        Toast.makeText(this, "Profile updates failed", Toast.LENGTH_SHORT).show();
-                    });
+            CollectionReference ref = mDatabase.collection("geofire");
+            GeoFirestore geoFirestore = new GeoFirestore(ref);
+
+//            geoFirestore.setLocation("", new GeoPoint(37.7889, -122.4056973), (exception) -> {
+//                if (exception == null) {
+//                    Log.d(TAG, "Location saved on server successfully!");
+//                } else {
+//                    Log.d(TAG, "lmao exception An error has occurred: " + exception);
+//                }
+//            });
+
+//            geoFirestore.setLocation("here", new GeoPoint(53.558944, -113.469944), (exception) -> {});
+////            geoFirestore.setLocation("station", new GeoPoint(53.559666, -113.469125), (exception) -> {});
+////            geoFirestore.setLocation("save-on-foods", new GeoPoint(53.562392, -113.466213), (exception) -> {});
+////            geoFirestore.setLocation("uni", new GeoPoint(53.528478, -113.527200), (exception) -> {});
+////            geoFirestore.setLocation("madeeha", new GeoPoint(53.416017, -113.435362), (exception) -> {});
+////            geoFirestore.setLocation("calgary", new GeoPoint(51.166625, -113.952498), (exception) -> {});
+
+//            geoFirestore.getAtLocation( (docs, ex) => {
+//                for (QueryDocumentSnapshot doc: docs) {
+//                    Log.d(TAG, "Got: " doc.);
+//                }
+//            });
+
+            // Link: https://github.com/imperiumlabs/GeoFirestore-Android
+            // another one: https://stackoverflow.com/questions/58999535/geofirestore-getatlocation-not-returning-the-full-list-of-documents
+            
+            // Return everything within radius starting at geolocation
+            geoFirestore.getAtLocation(new GeoPoint(53.558944, -113.469944), 10000.0, new GeoFirestore.SingleGeoQueryDataEventCallback() {
+                @Override
+                public void onComplete(@Nullable List<? extends DocumentSnapshot> list, @Nullable Exception e) {
+                    Log.i(TAG, "GeoFirestore: onComplete");
+                    if (e != null) {
+                        Log.i(TAG, "GeoFirestore: onComplete: error");
+                        return;
+                    } else {
+                        Log.i(TAG, "GeoFirestore: onComplete: list.size() is "+ list.size());
+                        for (DocumentSnapshot documentSnapshot : list) {
+                            Log.i(TAG, "GeoFirestore: onComplete: documentSnapshot is "+ documentSnapshot.getId());
+                        }
+                    }
+                }
+            });
+
+        });
+
+        mMessage.observe(this, (
+                @Nullable
+                        String string) ->
+
+        {
+            mTextBox.setText(string);
         });
 
     }
+
 
     private void updateTextBox() {
         if (mUser != null) {
